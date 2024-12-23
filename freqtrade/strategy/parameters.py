@@ -124,6 +124,85 @@ class NumericParameter(BaseParameter):
         super().__init__(default=default, space=space, optimize=optimize, load=load, **kwargs)
 
 
+class StepParameter(NumericParameter):
+    """
+    Parameter that can be optimized with fixed steps between values.
+    Inherits from NumericParameter to maintain compatibility with the optimization framework.
+    """
+
+    default: int
+    value: int
+    low: int
+    high: int
+    step: int
+
+    def __init__(
+        self,
+        low: int | Sequence[int],
+        high: int | None = None,
+        step: int = 1,
+        *,
+        default: int,
+        space: str | None = None,
+        optimize: bool = True,
+        load: bool = True,
+        **kwargs,
+    ):
+        """
+        Initialize step parameter with fixed intervals.
+
+        :param low: Lower bound (inclusive) or [low, high] sequence
+        :param high: Upper bound (inclusive), must be None if range passed as sequence
+        :param step: Step size between values
+        :param default: Default value
+        :param space: Parameter category (e.g. 'buy' or 'sell')
+        :param optimize: Include parameter in optimization
+        :param load: Load parameter from space_params
+        :param kwargs: Extra parameters for skopt.space.Integer
+        """
+        # Initialize parent class first to set up low/high values
+        super().__init__(
+            low=low, high=high, default=default, space=space, optimize=optimize, load=load, **kwargs
+        )
+
+        if step <= 0:
+            raise OperationalException(f"Step must be positive, got {step}")
+
+        if (self.high - self.low) % step != 0:
+            raise OperationalException(
+                f"Range {self.high - self.low} must be divisible by step {step}"
+            )
+
+        self.step = step
+
+        # Validate default value
+        if (default - self.low) % step != 0:
+            raise OperationalException(f"Default value {default} does not match step size {step}")
+
+    def get_space(self, name: str) -> "Integer":
+        """
+        Create skopt optimization space.
+        :param name: Name of parameter field
+        """
+        return Integer(low=self.low, high=self.high, name=name, **self._space_params)
+
+    @property
+    def range(self):
+        """
+        Get valid values as range.
+        Returns all possible values in optimize mode,
+        otherwise returns just the current value.
+        """
+        if self.can_optimize():
+            return range(self.low, self.high )
+        else:
+            return range(self.value, self.value + 1)
+
+    def __repr__(self):
+        """String representation including step size"""
+        return f"{self.__class__.__name__}(value={self.value}, step={self.step})"
+
+
 class IntParameter(NumericParameter):
     default: int
     value: int
