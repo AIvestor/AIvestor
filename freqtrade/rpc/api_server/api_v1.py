@@ -27,6 +27,7 @@ from freqtrade.rpc.api_server.api_schemas import (
     FreqAIModelListResponse,
     Health,
     HyperoptLossListResponse,
+    ListCustomData,
     Locks,
     LocksPayload,
     Logs,
@@ -533,3 +534,8 @@ def sysinfo():
 @router.get("/health", response_model=Health, tags=["info"])
 def health(rpc: RPC = Depends(get_rpc)):
     return rpc.health()
+
+@router.get("/trades/{tradeid}/custom-data", response_model=list[ListCustomData], tags=["info"])
+def list_custom_data(trade_id: int, rpc: RPC = Depends(get_rpc)):     
+    custom_data = rpc._rpc_list_custom_data(trade_id)
+    return custom_data
