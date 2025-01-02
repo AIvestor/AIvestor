@@ -59,6 +59,7 @@ class BaseEnvironment(gym.Env):
         can_short: bool = False,
         pair: str = "",
         df_raw: DataFrame = DataFrame(),
+        action_space_type: str = "Discrete"
     ):
         """
         Initializes the training/eval environment.
@@ -92,6 +93,7 @@ class BaseEnvironment(gym.Env):
         self.tensorboard_metrics: dict = {}
         self.can_short: bool = can_short
         self.live: bool = live
+        self.action_space_type: str = action_space_type
         if not self.live and self.add_state_info:
             raise OperationalException(
                 "`add_state_info` is not available in backtesting. Change "
