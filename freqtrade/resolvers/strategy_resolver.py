@@ -78,6 +78,7 @@ class StrategyResolver(IResolver):
             ("disable_dataframe_checks", False),
             ("ignore_buying_expired_candle_after", 0),
             ("position_adjustment_enable", False),
+            ("custom_orders_enable", False),
             ("max_entry_position_adjustment", -1),
             ("max_open_trades", -1),
         ]

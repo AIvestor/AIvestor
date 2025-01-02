@@ -38,6 +38,7 @@ from freqtrade.exchange import (
 )
 from freqtrade.exchange.exchange import Exchange
 from freqtrade.ft_types import BacktestResultType, get_BacktestResultType_default
+from freqtrade.ft_types.order_to_type import OrderToCreate
 from freqtrade.leverage.liquidation_price import update_liquidation_prices
 from freqtrade.mixins import LoggingMixin
 from freqtrade.optimize.backtest_caching import get_strategy_run_id
@@ -601,6 +602,88 @@ class Backtesting:
             # This should not be reached...
             return row[OPEN_IDX]
 
+    def _get_adjust_custom_orders_for_candle(
+        self, trade: LocalTrade, row: tuple, current_time: datetime
+    ) -> LocalTrade:
+        orders_to_validate = self.strategy.adjust_custom_orders(
+            trade.pair, trade, trade.leverage, current_time
+        )
+
+        trade_side: LongShort = "short" if trade.is_short else "long"
+        ordersToCreate = []
+
+        if (len(orders_to_validate) > 0) & self.config["custom_orders_enable"]:
+            for otv in orders_to_validate:
+                amount = amount_to_contract_precision(
+                    abs(otv.amount),
+                    trade.amount_precision,
+                    self.precision_mode,
+                    trade.contract_size,
+                )
+
+                propose_rate = price_to_precision(
+                    otv.price, trade.price_precision, self.precision_mode_price
+                )
+
+                req_stake_amount = (propose_rate * amount) / trade.leverage
+                reduce_only = True if otv.action_side == "exit" else False
+
+                order_to_create = OrderToCreate(
+                    pair=trade.pair,
+                    type=otv.type,
+                    side=otv.side,
+                    price=propose_rate,
+                    amount=amount,
+                    stake_amount=req_stake_amount,
+                    leverage=trade.leverage,
+                    order_tag=otv.order_tag,  # Ensure a valid string is passed
+                    reduce_only=reduce_only,
+                    time_in_force=otv.time_in_force,  # Ensure a valid string is passed
+                    trade_side=trade_side,
+                )
+                ordersToCreate.append(order_to_create)
+
+        sum_stake_amount = sum(od.stake_amount for od in ordersToCreate)
+        if sum_stake_amount > self.config.get("stake_amount", 0):
+            logger.warning(
+                f"custom_orders sum_stake_amount of {sum_stake_amount} "
+                f"is over stake_amount of {self.config.get('stake_amount', 0)}, "
+                f"aborting {trade.pair} custom_orders {otv.action_side} "
+                "you should reduce your position size or raise the stake_amount"
+            )
+            ordersToCreate = []
+
+        # Get existing order tags
+        existing_tags = {order.ft_order_tag for order in trade.orders}
+
+        # Filter orders by side and exclude those with existing tags
+        entry_otc: list[OrderToCreate] = []
+        exit_otc: list[OrderToCreate] = []
+
+        for order in ordersToCreate:
+            if order.side == trade.entry_side:
+                if order.order_tag in existing_tags:
+                    logger.info(
+                        f"Skipping {trade.entry_side} order with duplicate order_tag "
+                        f" '{order.order_tag}' for {trade.pair}. Skipped order: {order}"
+                    )
+                else:
+                    entry_otc.append(order)
+            else:
+                if order.order_tag in existing_tags:
+                    logger.info(
+                        f"Skipping {trade.exit_side} order with duplicate order_tag "
+                        f" '{order.order_tag}' for {trade.pair}. Skipped order: {order}"
+                    )
+                else:
+                    exit_otc.append(order)
+
+        # Simulate order execution
+        trade = self.update_trade_from_ordersToCreate(trade, entry_otc, row)
+        trade = self.update_trade_from_ordersToCreate(trade, exit_otc, row)
+
+        return trade
+
     def _get_adjust_trade_entry_for_candle(
         self, trade: LocalTrade, row: tuple, current_time: datetime
     ) -> LocalTrade:
@@ -866,6 +949,10 @@ class Backtesting:
         # Check if we need to adjust our current positions
         if self.strategy.position_adjustment_enable:
             trade = self._get_adjust_trade_entry_for_candle(trade, row, current_time)
+
+        # Check if we need to adjust our current positions (custom_orders)
+        if self.strategy.custom_orders_enable:
+            trade = self._get_adjust_custom_orders_for_candle(trade, row, current_time)
 
         if trade.is_open:
             enter = row[SHORT_IDX] if trade.is_short else row[LONG_IDX]
@@ -1142,6 +1229,42 @@ class Backtesting:
                 remaining=amount,
                 cost=amount * propose_rate * (1 + self.fee),
                 ft_order_tag=entry_tag,
+            )
+            order._trade_bt = trade
+            trade.orders.append(order)
+            self._try_close_open_order(order, trade, current_time, row)
+            trade.recalc_trade_from_orders()
+
+        return trade
+
+    def update_trade_from_ordersToCreate(
+        self, trade: LocalTrade, ordersToCreate: list[OrderToCreate], row: tuple
+    ) -> LocalTrade:
+        current_time = row[DATE_IDX].to_pydatetime()
+        for o in ordersToCreate:
+            self.order_id_counter += 1
+            order = Order(
+                id=self.order_id_counter,
+                ft_trade_id=trade.id,
+                ft_is_open=True,
+                ft_pair=trade.pair,
+                order_id=str(self.order_id_counter),
+                symbol=trade.pair,
+                ft_order_side=trade.entry_side,
+                side=trade.entry_side,
+                order_type=o.type,
+                status="open",
+                order_date=current_time,
+                order_filled_date=current_time,
+                order_update_date=current_time,
+                ft_price=o.price,
+                price=o.price,
+                average=o.price,
+                amount=o.amount,
+                filled=0,
+                remaining=o.amount,
+                cost=o.amount * o.price * (1 + self.fee),
+                ft_order_tag=o.order_tag,
             )
             order._trade_bt = trade
             trade.orders.append(order)

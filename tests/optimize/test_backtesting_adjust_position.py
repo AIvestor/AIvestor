@@ -10,6 +10,7 @@ from freqtrade.configuration import TimeRange
 from freqtrade.data import history
 from freqtrade.data.history import get_timerange
 from freqtrade.enums import ExitType
+from freqtrade.freqtradebot import OrderToValidate
 from freqtrade.optimize.backtesting import Backtesting
 from freqtrade.util.datetime_helpers import dt_utc
 from tests.conftest import EXMS, patch_exchange
@@ -222,3 +223,90 @@ def test_backtest_position_adjustment_detailed(default_conf, fee, mocker, levera
     backtesting.strategy.adjust_trade_position = MagicMock(return_value=-trade.stake_amount)
     trade = backtesting._get_adjust_trade_entry_for_candle(trade, row_exit, current_time)
     assert trade.is_open is False
+
+
+@pytest.mark.parametrize("leverage", [1, 10])
+def test_backtest_adjust_custom_orders(default_conf, fee, mocker, leverage) -> None:
+    default_conf["use_exit_signal"] = False
+    mocker.patch(f"{EXMS}.get_fee", fee)
+    mocker.patch(f"{EXMS}.get_min_pair_stake_amount", return_value=10)
+    mocker.patch(f"{EXMS}.get_max_pair_stake_amount", return_value=float("inf"))
+    mocker.patch(f"{EXMS}.get_max_leverage", return_value=10)
+    mocker.patch(f"{EXMS}.get_maintenance_ratio_and_amt", return_value=(0.1, 0.1))
+    mocker.patch("freqtrade.optimize.backtesting.Backtesting._run_funding_fees")
+
+    patch_exchange(mocker)
+    default_conf.update(
+        {
+            "stake_amount": 100.0,
+            "dry_run_wallet": 1000.0,
+            "strategy": "StrategyTestV3",
+            "trading_mode": "futures",
+            "margin_mode": "isolated",
+        }
+    )
+    default_conf["pairlists"] = [{"method": "StaticPairList", "allow_inactive": True}]
+    default_conf["custom_orders_enable"] = True
+    backtesting = Backtesting(default_conf)
+    backtesting._can_short = True
+    backtesting._set_strategy(backtesting.strategylist[0])
+    pair = "XRP/USDT:USDT"
+    row_0 = [
+        pd.Timestamp(year=2020, month=1, day=1, hour=4, minute=0),
+        2.11,  # Open
+        2.15,  # High
+        2.10,  # Low
+        2.14,  # Close
+        1,  # enter_long
+        0,  # exit_long
+        0,  # enter_short
+        0,  # exit_short
+        "",  # enter_tag
+        "",  # exit_tag,
+    ]
+
+    backtesting.strategy.leverage = MagicMock(return_value=leverage)
+    trade = backtesting._enter_trade(pair, row=row_0, direction="long")
+    current_time = row_0[0].to_pydatetime()
+    assert trade
+    assert len(trade.orders) == 1
+
+    # Create 3 entry orders via custom_orders
+    backtesting.strategy.adjust_custom_orders = MagicMock(
+        return_value=[
+            OrderToValidate(
+                type="limit",
+                side="buy",
+                price=2.05,
+                amount=5,
+                action_side="entry",
+                time_in_force="GTC",
+                order_tag="entry_tag_1",
+                trade_side="long",
+            ),
+            OrderToValidate(
+                type="limit",
+                side="buy",
+                price=2.04,
+                amount=5,
+                action_side="entry",
+                time_in_force="GTC",
+                order_tag="entry_tag_2",
+                trade_side="long",
+            ),
+            OrderToValidate(
+                type="limit",
+                side="buy",
+                price=2.03,
+                amount=5,
+                action_side="entry",
+                time_in_force="GTC",
+                order_tag="entry_tag_3",
+                trade_side="long",
+            ),
+        ]
+    )
+
+    trade = backtesting._get_adjust_custom_orders_for_candle(trade, row_0, current_time)
+    assert len(trade.orders) == 4  # Initial order + 3 custom orders
+    assert trade.nr_of_successful_entries == 1

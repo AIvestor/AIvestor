@@ -171,6 +171,7 @@ class RPC:
             "state": str(botstate),
             "runmode": config["runmode"].value,
             "position_adjustment_enable": config.get("position_adjustment_enable", False),
+            "custom_orders_enable": config.get("custom_orders_enable", False),
             "max_entry_position_adjustment": (
                 config.get("max_entry_position_adjustment", -1)
                 if config.get("max_entry_position_adjustment") != float("inf")

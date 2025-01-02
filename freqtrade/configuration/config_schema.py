@@ -724,6 +724,10 @@ CONF_SCHEMA = {
             "description": f"Enable position adjustment. {__IN_STRATEGY}",
             "type": "boolean",
         },
+        "custom_orders_enable": {
+            "description": f"Enable custom orders. {__IN_STRATEGY}",
+            "type": "boolean",
+        },
         # Download data section
         "new_pairs_days": {
             "description": "Download data of new pairs for given number of days",

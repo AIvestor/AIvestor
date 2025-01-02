@@ -111,6 +111,9 @@ class IStrategy(ABC, HyperStrategyMixin):
     position_adjustment_enable: bool = False
     max_entry_position_adjustment: int = -1
 
+    # Position adjustment is disabled by default
+    custom_orders_enable: bool = False
+
     # Number of seconds after which the candle will no longer result in a buy on expired candles
     ignore_buying_expired_candle_after: int = 0
 
@@ -580,6 +583,58 @@ class IStrategy(ABC, HyperStrategyMixin):
         None or False.
         """
         return self.custom_sell(pair, trade, current_time, current_rate, current_profit, **kwargs)
+
+    def custom_orders(
+        self,
+        pair: str,
+        trade: Trade | None,
+        leverage: float | None,
+        current_time: datetime,
+        entry_tag: str | None,
+        side: str,
+        **kwargs,
+    ) -> list | None:
+        """
+        Custom orders list to create, returning updated list of orders to create/update.
+
+        For full documentation please go to https://www.freqtrade.io/en/latest/strategy-advanced/
+
+        When not implemented by a strategy, returns None
+
+        :param pair: Pair that's currently analyzed
+        :param trade: trade object (None for initial entries).
+        :param leverage: Leverage selected for this trade.
+        :param current_time: datetime object, containing the current datetime
+        :param entry_tag: Optional entry_tag (buy_tag) if provided with the buy signal.
+        :param side: 'long' or 'short' - indicating the direction of the proposed trade
+        :param **kwargs: Ensure to keep this here so updates to this won't break your strategy.
+        :return array: Array of dict containing orders to create
+        """
+        return None
+
+    def adjust_custom_orders(
+        self,
+        pair: str,
+        trade: Trade | None,
+        leverage: float | None,
+        current_time: datetime,
+        **kwargs,
+    ) -> list | None:
+        """
+        Custom orders list to create or update, returning updated list of orders to create/update.
+
+        For full documentation please go to https://www.freqtrade.io/en/latest/strategy-advanced/
+
+        When not implemented by a strategy, returns None
+
+        :param pair: Pair that's currently analyzed
+        :param trade: trade object (None for initial entries).
+        :param leverage: Leverage selected for this trade.
+        :param current_time: datetime object, containing the current datetime
+        :param **kwargs: Ensure to keep this here so updates to this won't break your strategy.
+        :return array: Array of dict containing orders to create
+        """
+        return None
 
     def custom_stake_amount(
         self,

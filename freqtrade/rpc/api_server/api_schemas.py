@@ -245,6 +245,7 @@ class ShowConfig(BaseModel):
     state: str
     runmode: str
     position_adjustment_enable: bool
+    custom_orders_enable: bool
     max_entry_position_adjustment: int
 
 
