@@ -77,37 +77,27 @@ def start_hyperopt_show(args: dict[str, Any]) -> None:
 
     # Previous evaluations
     epochs, total_epochs = HyperoptTools.load_filtered_results(results_file, config)
+    epoch_numbers = [e["current_epoch"] for e in epochs]
 
-    filtered_epochs = len(epochs)
+    epoch = next(filter(lambda e: e["current_epoch"] == n, epochs), None)
 
-    if n > filtered_epochs:
+    if not epoch:
         raise OperationalException(
-            f"The index of the epoch to show should be less than {filtered_epochs + 1}."
-        )
-    if n < -filtered_epochs:
-        raise OperationalException(
-            f"The index of the epoch to show should be greater than {-filtered_epochs - 1}."
+            f"The epoch {n} could not be found in the filtered list of epochs {epoch_numbers}"
         )
 
-    # Translate epoch index from human-readable format to pythonic
-    if n > 0:
-        n -= 1
-
-    if epochs:
-        val = epochs[n]
-
-        metrics = val["results_metrics"]
-        if "strategy_name" in metrics:
-            strategy_name = metrics["strategy_name"]
-            show_backtest_result(
-                strategy_name,
-                metrics,
-                metrics["stake_currency"],
-                config.get("backtest_breakdown", []),
-            )
-
-            HyperoptTools.try_export_params(config, strategy_name, val)
-
-        HyperoptTools.show_epoch_details(
-            val, total_epochs, print_json, no_header, header_str="Epoch details"
+    metrics = epoch["results_metrics"]
+    if "strategy_name" in metrics:
+        strategy_name = metrics["strategy_name"]
+        show_backtest_result(
+            strategy_name,
+            metrics,
+            metrics["stake_currency"],
+            config.get("backtest_breakdown", []),
         )
+
+        HyperoptTools.try_export_params(config, strategy_name, epoch)
+
+    HyperoptTools.show_epoch_details(
+        epoch, total_epochs, print_json, no_header, header_str="Epoch details"
+    )
