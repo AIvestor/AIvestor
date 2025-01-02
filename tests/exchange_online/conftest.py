@@ -335,6 +335,71 @@ EXCHANGES = {
         "leverage_in_spot_market": True,
         "private_methods": ["fetch_accounts"],
     },
+    "bitget": {
+        "pair": "BTC/USDT",
+        "stake_currency": "USDT",
+        "hasQuoteVolume": True,
+        "timeframe": "1h",
+        "futures": True,
+        "futures_pair": "BTC/USDT:USDT",
+        "hasQuoteVolumeFutures": True,
+        "leverage_tiers_public": True,
+        "leverage_in_spot_market": True,
+        "orderbook_max_entries": 50,
+        "sample_order": [
+            {
+                "symbol": "SOLUSDT",
+                "size": "1.1",
+                "orderId": "1111465253393825792",
+                "clientOid": "1111465253431574529",
+                "baseVolume": "0",
+                "fee": "0",
+                "price": "15.5",
+                "priceAvg": "",
+                "state": "live",
+                "side": "buy",
+                "force": "gtc",
+                "totalProfits": "0",
+                "posSide": "long",
+                "marginCoin": "USDT",
+                "presetStopSurplusPrice": "",
+                "presetStopLossPrice": "",
+                "quoteVolume": "0",
+                "orderType": "limit",
+                "leverage": "20",
+                "marginMode": "crossed",
+                "reduceOnly": "NO",
+                "enterPointSource": "API",
+                "tradeSide": "open",
+                "posMode": "hedge_mode",
+                "orderSource": "normal",
+                "cTime": "1674493798550",
+                "uTime": "1674493798550",
+            }
+        ],
+        "sample_my_trades": [
+            {
+                "userId": "7264631750",
+                "symbol": "BTCUSDT",
+                "orderId": "1098394344925597696",
+                "tradeId": "1098394344974925824",
+                "orderType": "market",
+                "side": "sell",
+                "priceAvg": "28467.68",
+                "size": "0.0002",
+                "amount": "5.693536",
+                "feeDetail": {
+                    "deduction": "no",
+                    "feeCoin": "USDT",
+                    "totalDeductionFee": "",
+                    "totalFee": "-0.005693536",
+                },
+                "tradeScope": "taker",
+                "cTime": "1697603539699",
+                "uTime": "1697603539754",
+            }
+        ],
+    },
     "bybit": {
         "pair": "BTC/USDT",
         "stake_currency": "USDT",
@@ -531,6 +596,7 @@ def get_futures_exchange(exchange_name, exchange_conf, class_mocker):
         class_mocker.patch("freqtrade.exchange.binance.Binance.additional_exchange_init")
         class_mocker.patch("freqtrade.exchange.bybit.Bybit.additional_exchange_init")
         class_mocker.patch("freqtrade.exchange.gate.Gate.additional_exchange_init")
+        class_mocker.patch("freqtrade.exchange.bitget.Bitget.additional_exchange_init")
         class_mocker.patch(f"{EXMS}.load_cached_leverage_tiers", return_value=None)
         class_mocker.patch(f"{EXMS}.cache_leverage_tiers")
 

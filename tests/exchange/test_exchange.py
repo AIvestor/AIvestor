@@ -51,7 +51,7 @@ from tests.conftest import (
 
 
 # Make sure to always keep one exchange here which is NOT subclassed!!
-EXCHANGES = ["binance", "kraken", "gate", "kucoin", "bybit", "okx"]
+EXCHANGES = ["binance", "kraken", "gate", "kucoin", "bybit", "okx", "bitget"]
 
 get_entry_rate_data = [
     ("other", 20, 19, 10, 0.0, 20),  # Full ask side
@@ -1740,6 +1740,9 @@ def test_fetch_orders(default_conf, mocker, exchange_name, limit_order):
     if exchange_name == "bybit":
         expected = 3
 
+    if exchange_name == "bitget":
+        expected = 3
+
     exchange = get_patched_exchange(mocker, default_conf, api_mock, exchange=exchange_name)
     # Not available in dry-run
     assert exchange.fetch_orders("mocked", start_time) == []
@@ -2180,6 +2183,18 @@ def test_get_historic_ohlcv(default_conf, mocker, caplog, exchange_name, candle_
         raise TimeoutError()
 
     exchange._async_get_candle_history = MagicMock(side_effect=mock_get_candle_hist_error)
+    if exchange_name == "bitget":
+        ohlcv = [
+            [
+                int((datetime.now(timezone.utc).timestamp() - 1000) * 1000),
+                1,  # open
+                2,  # high
+                3,  # low
+                4,  # close
+                5,  # volume (in quote currency)
+            ]
+        ]
+        exchange._api_async.fetch_ohlcv = get_mock_coro(ohlcv)
     ret = exchange.get_historic_ohlcv(
         pair, "5m", dt_ts(dt_now() - timedelta(seconds=since)), candle_type=candle_type
     )
@@ -2224,6 +2239,8 @@ async def test__async_get_historic_ohlcv(default_conf, mocker, caplog, exchange_
     exp = candles // exchange.ohlcv_candle_limit("5m", candle_type, start_ts) + 1
 
     # Depending on the exchange, this should be called between 1 and 6 times.
+    if exchange_name == "bitget":
+        exp += 1
     assert exchange._api_async.fetch_ohlcv.call_count == exp
 
 
@@ -4946,6 +4963,8 @@ def test_validate_trading_mode_and_margin_mode(
         ("kraken", "futures", {"options": {"defaultType": "swap"}}),
         ("kucoin", "futures", {"options": {"defaultType": "swap"}}),
         ("okx", "futures", {"options": {"defaultType": "swap"}}),
+        ("bitget", "spot", {"options": {"defaultType": "spot"}}),
+        ("bitget", "futures", {"options": {"defaultType": "swap"}}),
     ],
 )
 def test__ccxt_config(default_conf, mocker, exchange_name, trading_mode, ccxt_config):
@@ -5567,6 +5586,10 @@ def test_amount_to_contract_precision(
         ("binance", 2.0, False, "spot", None),
         ("binance", 2.0, False, "spot", "cross"),
         ("binance", 2.0, True, "spot", "isolated"),
+        # Bitget
+        ("bitget", 2.0, False, "spot", None),
+        ("bitget", 2.0, False, "spot", "cross"),
+        ("bitget", 2.0, True, "spot", "isolated"),
     ],
 )
 def test_liquidation_price_is_none(
@@ -5908,7 +5931,7 @@ def test_get_max_leverage_futures(default_conf, mocker, leverage_tiers):
         exchange.get_max_leverage("BTC/USDT:USDT", 1000000000.01)
 
 
-@pytest.mark.parametrize("exchange_name", ["binance", "kraken", "gate", "okx", "bybit"])
+@pytest.mark.parametrize("exchange_name", ["binance", "kraken", "gate", "okx", "bybit", "bitget"])
 def test__get_params(mocker, default_conf, exchange_name):
     api_mock = MagicMock()
     mocker.patch(f"{EXMS}.exchange_has", return_value=True)
@@ -5931,6 +5954,9 @@ def test__get_params(mocker, default_conf, exchange_name):
 
     if exchange_name == "bybit":
         params2["position_idx"] = 0
+
+    if exchange_name == "bitget":
+        params2["marginMode"] = "isolated"
 
     assert (
         exchange._get_params(
@@ -6113,6 +6139,16 @@ def test_get_liquidation_price1(mocker, default_conf):
         (True, "futures", "bybit", "isolated", 3.0, 10.0, 1.0, 13.233333),
         (True, "futures", "bybit", "isolated", 5.0, 10.0, 1.0, 11.9),
         (True, "futures", "bybit", "isolated", 10.0, 10.0, 1.0, 10.9),
+        # bitget, long
+        (False, "futures", "bitget", "isolated", 1.0, 10.0, 1.0, 0.0),
+        (False, "futures", "bitget", "isolated", 3.0, 10.0, 1.0, 6.738090425173506),
+        (False, "futures", "bitget", "isolated", 5.0, 10.0, 1.0, 8.085708510208207),
+        (False, "futures", "bitget", "isolated", 10.0, 10.0, 1.0, 9.096422073984233),
+        # bitget, short
+        (True, "futures", "bitget", "isolated", 1.0, 10.0, 1.0, 19.790223629527016),
+        (True, "futures", "bitget", "isolated", 3.0, 10.0, 1.0, 13.193482419684678),
+        (True, "futures", "bitget", "isolated", 5.0, 10.0, 1.0, 11.87413417771621),
+        (True, "futures", "bitget", "isolated", 10.0, 10.0, 1.0, 10.884622996239859),
     ],
 )
 def test_get_liquidation_price(

@@ -1687,10 +1687,14 @@ class Exchange:
         if self._config["dry_run"] or self.trading_mode != TradingMode.FUTURES:
             return []
         try:
+            positions: list[CcxtPosition]
             symbols = []
             if pair:
                 symbols.append(pair)
-            positions: list[CcxtPosition] = self._api.fetch_positions(symbols)
+            if symbols:
+                positions = self._api.fetch_positions(symbols)
+            else:
+                positions = self._api.fetch_positions()
             self._log_exchange_response("fetch_positions", positions)
             return positions
         except ccxt.DDoSProtection as e:

@@ -95,7 +95,11 @@ class TestCCXTExchange:
         if trades := EXCHANGES[exchange_name].get("sample_my_trades"):
             pair = "SOL/USDT"
             for trade in trades:
-                po = exch._api.parse_trade(trade)
+                if exchange_name == "bitget":
+                    market = exch._api.markets[pair]
+                    po = exch._api.parse_trade(trade, market)
+                else:
+                    po = exch._api.parse_trade(trade)
                 assert po["symbol"] == pair
                 assert isinstance(po["id"], str)
                 assert isinstance(po["side"], str)
